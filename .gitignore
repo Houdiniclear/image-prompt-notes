@@ -1,3 +1,4 @@
 node_modules
 .next
 data/images
+data/notes.json
