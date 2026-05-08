@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 书籍分类（多级分类）
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  parentId  String?
+  parent    Category?  @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Category[] @relation("CategoryChildren")
+  books     Book[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([parentId])
+}
+
+// 书籍信息
+model Book {
+  id          String   @id @default(cuid())
+  title       String
+  author      String?
+  description String?
+  coverImage  String?
+  isbn        String?
+  publisher   String?
+  publishDate DateTime?
+  pageCount   Int?
+  language    String?  @default("zh-CN")
+  sourceType  String   @default("upload") // upload, search, manual
+  sourceFile  String?  // 上传文件路径
+  rawContent  String?  // 提取的原始文本内容
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  notes       Note[]
+  flashcards  Flashcard[]
+  tags        String[] @default([])
+  readProgress Int     @default(0) // 阅读进度 0-100
+  lastReadAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([tags])
+}
+
+// 笔记
+model Note {
+  id          String   @id @default(cuid())
+  bookId      String
+  book        Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  type        String   @default("general") // general, summary, quote, insight, question
+  title       String?
+  content     String   // JSON 富文本内容
+  pageNumber  Int?
+  chapter     String?
+  isAiGenerated Boolean @default(false)
+  connections KnowledgeConnection[] @relation("NoteConnections")
+  flashcards  Flashcard[]
+  tags        String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([bookId])
+  @@index([type])
+  @@index([tags])
+}
+
+// 闪卡（间隔重复记忆）
+model Flashcard {
+  id           String   @id @default(cuid())
+  bookId       String
+  book         Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  noteId       String?
+  note         Note?    @relation(fields: [noteId], references: [id], onDelete: SetNull)
+  front        String   // 正面内容（问题）
+  back         String   // 背面内容（答案）
+  interval     Int      @default(1) // 间隔天数
+  repetitions  Int      @default(0) // 重复次数
+  easeFactor   Float    @default(2.5) // 难度因子 SM-2
+  nextReview   DateTime @default(now())
+  lastReviewed DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([bookId])
+  @@index([nextReview])
+}
+
+// 知识关联（笔记之间的连接）
+model KnowledgeConnection {
+  id          String   @id @default(cuid())
+  fromNoteId  String
+  fromNote    Note     @relation("NoteConnections", fields: [fromNoteId], references: [id], onDelete: Cascade)
+  toNoteId    String
+  toNote      Note     @relation(fields: [toNoteId], references: [id], onDelete: Cascade)
+  type        String   @default("related") // related, reference, contrast, support
+  strength    Float    @default(0.5) // 关联强度 0-1
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([fromNoteId])
+  @@index([toNoteId])
+  @@index([type])
+}
+
+// 向量嵌入索引（用于语义搜索）
+model Embedding {
+  id          String   @id @default(cuid())
+  bookId      String
+  book        Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chunkIndex  Int      // 文本块索引
+  text        String   // 原始文本内容
+  vector      String?  // 向量数据（JSON 格式）
+  createdAt   DateTime @default(now())
+
+  @@index([bookId])
+  @@index([chunkIndex])
+}
+
+// 处理任务队列状态
+model ProcessingTask {
+  id          String   @id @default(cuid())
+  bookId      String
+  book        Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  type        String   // parse_content, generate_notes, generate_embeddings
+  status      String   // pending, processing, completed, failed
+  progress    Int      @default(0)
+  totalSteps  Int      @default(100)
+  errorMessage String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([bookId])
+  @@index([status])
+}
