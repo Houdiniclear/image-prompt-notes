@@ -250,5 +250,5 @@ export function combinePrompt(structured: StructuredPrompt): string {
 
 // 检查API Key是否已配置
 export function hasApiKeyConfigured(): boolean {
-  return !!API_KEY && API_KEY !== 'your-api-key-here';
+  return typeof API_KEY === 'string' && API_KEY.length > 0 && API_KEY !== 'your-api-key-here';
 }
