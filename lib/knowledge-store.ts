@@ -26,8 +26,10 @@ function calculateSimilarity(a: StructuredPrompt, b: StructuredPrompt): number {
     const kwB = new Set(getKeywords(b[dim]));
     
     if (kwA.size > 0 || kwB.size > 0) {
-      const intersection = [...kwA].filter(k => kwB.has(k)).length;
-      const union = new Set([...kwA, ...kwB]).size;
+      const arrA = Array.from(kwA);
+      const arrB = Array.from(kwB);
+      const intersection = arrA.filter(k => kwB.has(k)).length;
+      const union = new Set(arrA.concat(arrB)).size;
       score += union > 0 ? intersection / union : 0;
       total += 1;
     }
