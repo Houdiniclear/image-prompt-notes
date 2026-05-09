@@ -2,8 +2,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, FolderOpen, Tag, Image as ImageIcon, Copy, Trash2, Settings } from "lucide-react";
+import { Plus, FolderOpen, Tag, Image as ImageIcon, Trash2, Settings } from "lucide-react";
 import type { Note, Category } from "@/types";
+import * as db from "@/lib/local-db";
 
 export default function Home() {
   const router = useRouter();
@@ -15,10 +16,12 @@ export default function Home() {
   const [showCategoryEditor, setShowCategoryEditor] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryColor, setNewCategoryColor] = useState("#3B82F6");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    fetch("/api/notes").then((r) => r.json()).then(setNotes);
-    fetch("/api/categories").then((r) => r.json()).then(setCategories);
+    setMounted(true);
+    setNotes(db.getNotes());
+    setCategories(db.getCategories());
   }, []);
 
   const filteredNotes = notes.filter((n) => {
@@ -27,31 +30,30 @@ export default function Home() {
     return matchCategory && matchSearch;
   });
 
-  const createNote = async () => {
+  const createNote = () => {
     setCreating(true);
     try {
-      const res = await fetch("/api/notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "新笔记", categoryId: selectedCategory, url: "", images: [], promptTemplates: [], content: "", tags: [] }),
+      const note = db.createNote({
+        title: "新笔记",
+        categoryId: selectedCategory,
+        url: "",
+        images: [],
+        promptTemplates: [],
+        content: "",
+        tags: [],
       });
-      const note = await res.json();
+      setNotes([note, ...notes]);
       router.push(`/note/${note.id}`);
-    } catch (e) {
-      alert("创建失败: " + e);
+    } catch (e: any) {
+      alert("创建失败: " + e.message);
     }
     setCreating(false);
   };
 
-  const createCategory = async () => {
+  const createCategory = () => {
     if (!newCategoryName.trim()) return;
     try {
-      const res = await fetch("/api/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCategoryName, color: newCategoryColor, icon: "folder" }),
-      });
-      const cat = await res.json();
+      const cat = db.createCategory({ name: newCategoryName, color: newCategoryColor, icon: "folder" });
       setCategories([...categories, cat]);
       setNewCategoryName("");
     } catch (e) {
@@ -59,10 +61,10 @@ export default function Home() {
     }
   };
 
-  const deleteCategory = async (id: string) => {
+  const deleteCategory = (id: string) => {
     if (!confirm("确定删除这个分类？笔记不会被删除")) return;
     try {
-      await fetch(`/api/categories/${id}`, { method: "DELETE" });
+      db.deleteCategory(id);
       setCategories(categories.filter(c => c.id !== id));
       if (selectedCategory === id) setSelectedCategory(null);
     } catch (e) {
@@ -214,8 +216,8 @@ export default function Home() {
                       e.preventDefault();
                       e.stopPropagation();
                       if (confirm(`确定删除「${note.title}」？`)) {
-                        fetch(`/api/notes/${note.id}`, { method: "DELETE" })
-                          .then(() => setNotes(notes.filter(n => n.id !== note.id)));
+                        db.deleteNote(note.id);
+                        setNotes(notes.filter(n => n.id !== note.id));
                       }
                     }}
                     className="absolute top-3 right-3 z-10 p-2 bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-500 hover:scale-110 backdrop-blur-sm"
